@@ -1,5 +1,7 @@
 # TRL - Transformer Reinforcement Learning
 
+PROOF OF CONCEPT
+
 <div style="text-align: center">
 <img src="https://huggingface.co/datasets/trl-lib/documentation-images/resolve/main/trl_banner_dark.png" alt="TRL Banner">
 </div>
