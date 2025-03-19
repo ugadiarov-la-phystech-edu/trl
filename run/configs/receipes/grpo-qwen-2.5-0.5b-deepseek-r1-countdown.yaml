@@ -8,7 +8,7 @@ tf32: true
 output_dir: logs/qwen-2.5-0.5b-r1-countdown
 
 # Dataset arguments
-dataset_id_or_path: qwen-2.5-0.5b-test/qwen-2.5-0.5b-test
+dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4
 
 # Lora Arguments
 # No LoRA is used here
