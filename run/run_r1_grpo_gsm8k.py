@@ -147,7 +147,7 @@ def correctness_reward_func(completions, answer, **kwargs):
           - 0.0 points for incorrect answers
        4. Tracks completion lengths for analysis.
     """
-    responses = [completion[0]['content'] for completion in completions]
+    responses = completions
     extracted = [extract_answer_from_model_output(r) for r in responses]
     rewards = []
     for r, a in zip(extracted, answer):
@@ -183,7 +183,7 @@ def format_reward_func(completions, answer, **kwargs):
           - Maximum score of 0.8 for perfect format compliance
        3. Stores and returns the format compliance scores.
     """
-    responses = [completion[0]['content'] for completion in completions]
+    responses = completions
     rewards = []
     for response in responses:
         score = 0.0
