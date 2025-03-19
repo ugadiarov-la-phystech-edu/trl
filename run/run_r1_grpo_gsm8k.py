@@ -126,13 +126,13 @@ def extract_single_number(text):
     return float(numbers[0]) if len(numbers) == 1 else None
 
 
-def correctness_reward_func(completions, answers, **kwargs):
+def correctness_reward_func(completions, answer, **kwargs):
     """
     Assigns a reward based on the correctness of the model's answer.
 
     Args:
        completions (list): List of model completions, each containing content.
-       answers (list): List of expected answers.
+       answer (list): List of expected answers.
        **kwargs: Additional keyword arguments.
 
     Returns:
@@ -150,7 +150,7 @@ def correctness_reward_func(completions, answers, **kwargs):
     responses = [completion[0]['content'] for completion in completions]
     extracted = [extract_answer_from_model_output(r) for r in responses]
     rewards = []
-    for r, a in zip(extracted, answers):
+    for r, a in zip(extracted, answer):
         if r == a:  # Exact match case
             rewards.append(2.0)
         else:
@@ -165,7 +165,7 @@ def correctness_reward_func(completions, answers, **kwargs):
     return rewards
 
 
-def format_reward_func(completions, answers, **kwargs):
+def format_reward_func(completions, answer, **kwargs):
     """
     Assigns a reward for adhering to the desired XML format.
 
