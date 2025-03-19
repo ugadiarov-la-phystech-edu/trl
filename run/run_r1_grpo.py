@@ -20,7 +20,7 @@ from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
 ########################
 @dataclass
 class ScriptArguments:
-    dataset_id_or_path: str = "test/test"
+    dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
 
