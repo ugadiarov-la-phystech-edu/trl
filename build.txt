@@ -1,0 +1,32 @@
+Build vllm:
+https://docs.vllm.ai/en/latest/getting_started/installation/gpu.html
+
+Build flash-attention:
+MAX_JOBS=48 pip -v install flash-attn --no-build-isolation
+https://alesha.pro/posts/buildind-vllm-from-source/
+
+Cloud:
+https://cloud.ru/docs/aicloud/mlspace/concepts/environments__basic-images-list__jobs
+
+SSH:
+https://cloud.ru/docs/aicloud/mlspace/concepts/guides/guides__cli/environments__cli-ssh-connect.html#id1
+
+Tutorials:
+
+GRPO:
+https://huggingface.co/docs/trl/main/en/grpo_trainer
+https://huggingface.co/learn/cookbook/fine_tuning_llm_grpo_trl
+https://huggingface.co/docs/trl/community_tutorials
+https://www.philschmid.de/mini-deepseek-r1
+https://github.com/Mohammadjafari80/GSM8K-RLVR
+https://medium.com/@saidines12/lets-reproduce-deepseek-r1-94474acbd073
+https://unfoldai.com/reasoning-in-a-non-english-language/
+
+
+PPO:
+https://huggingface.co/docs/trl/ppo_trainer
+https://huggingface.co/docs/trl/using_llama_models
+https://habr.com/ru/companies/wunderfund/articles/731128/
+https://huggingface.co/docs/trl/multi_adapter_rl
+https://huggingface.co/docs/trl/learning_tools
+https://github.com/huggingface/trl/blob/main/examples/research_projects/tools/python_interpreter.py
