@@ -146,7 +146,7 @@ if __name__ == "__main__":
                 padding=False,
             )
             return {"input_ids": outputs["input_ids"],
-                    'answer': str(random.randint(0, 9999999999))}
+                    'answer': [str(random.randint(0, 9999999999)) for _ in range(len(outputs["input_ids"]))]}
 
         return dataset.map(
             tokenize,
