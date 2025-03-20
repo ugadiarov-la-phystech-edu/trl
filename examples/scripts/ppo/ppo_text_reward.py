@@ -69,8 +69,8 @@ accelerate launch --config_file examples/accelerate_configs/deepspeed_zero3.yaml
 
 
 class Reward:
-    def __init__(self):
-        self.modules = []
+    def modules(self):
+        return []
 
     def __call__(self, queries, responses, answers):
         assert len(queries) == len(responses)
