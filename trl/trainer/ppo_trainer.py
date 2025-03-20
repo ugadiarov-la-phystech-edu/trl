@@ -794,7 +794,7 @@ class PPOTrainer(Trainer):
         model_card.save(os.path.join(self.args.output_dir, "README.md"))
 
 
-class PPOTrainerTextReward(Trainer):
+class PPOTrainerTextReward(PPOTrainer):
     def __init__(
         self,
         args: PPOConfig,
