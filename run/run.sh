@@ -1,0 +1,1 @@
+accelerate launch --num_processes 3 --config_file run/configs/accelerate_configs/deepspeed_zero3_4gpu.yaml run/run_r1_grpo_gsm8k.py --config run/configs/receipes/grpo-qwen-2.5-1.5b-deepseek-r1-gsm8k_4gpu.yaml
