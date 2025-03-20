@@ -18,6 +18,7 @@ import numpy as np
 import torch
 from accelerate import PartialState
 from datasets import load_dataset
+from torch import nn
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
@@ -68,11 +69,8 @@ accelerate launch --config_file examples/accelerate_configs/deepspeed_zero3.yaml
 """
 
 
-class Reward:
-    def modules(self):
-        return []
-
-    def __call__(self, queries, responses, answers):
+class Reward(nn.Module):
+    def forward(self, queries, responses, answers):
         assert len(queries) == len(responses)
         assert len(queries) == len(answers)
         print('################################## Compute reward ################################################')
