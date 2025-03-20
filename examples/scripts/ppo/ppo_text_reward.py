@@ -111,9 +111,9 @@ if __name__ == "__main__":
     value_model = AutoModelForSequenceClassification.from_pretrained(
         training_args.reward_model_path, trust_remote_code=model_args.trust_remote_code, num_labels=1
     )
-    reward_model = AutoModelForSequenceClassification.from_pretrained(
-        training_args.reward_model_path, trust_remote_code=model_args.trust_remote_code, num_labels=1
-    )
+    # reward_model = AutoModelForSequenceClassification.from_pretrained(
+    #     training_args.reward_model_path, trust_remote_code=model_args.trust_remote_code, num_labels=1
+    # )
     policy = AutoModelForCausalLM.from_pretrained(
         training_args.sft_model_path, trust_remote_code=model_args.trust_remote_code
     )
@@ -169,7 +169,7 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         model=policy,
         ref_model=ref_policy,
-        reward_model=reward_model,
+        reward_model=reward_function,
         value_model=value_model,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
