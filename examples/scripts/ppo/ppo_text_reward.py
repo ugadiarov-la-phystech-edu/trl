@@ -68,17 +68,21 @@ accelerate launch --config_file examples/accelerate_configs/deepspeed_zero3.yaml
 """
 
 
-def reward_function(queries, responses, answers):
-    assert len(queries) == len(responses)
-    assert len(queries) == len(answers)
-    print('################################## Compute reward ################################################')
-    for q, r, a in zip(queries, responses, answers):
-        print('query', q)
-        print('response', r)
-        print('answer', a)
-        print('---------------------------------------------------------------------------------------------')
+class Reward:
+    def __init__(self):
+        self.modules = []
 
-    return np.asarray([random.random() - 0.5 for _ in range(len(queries))])
+    def __call__(self, queries, responses, answers):
+        assert len(queries) == len(responses)
+        assert len(queries) == len(answers)
+        print('################################## Compute reward ################################################')
+        for q, r, a in zip(queries, responses, answers):
+            print('query', q)
+            print('response', r)
+            print('answer', a)
+            print('---------------------------------------------------------------------------------------------')
+
+        return np.asarray([random.random() - 0.5 for _ in range(len(queries))])
 
 
 if __name__ == "__main__":
@@ -169,7 +173,7 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         model=policy,
         ref_model=ref_policy,
-        reward_model=reward_function,
+        reward_model=Reward(),
         value_model=value_model,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
