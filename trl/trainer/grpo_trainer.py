@@ -943,7 +943,7 @@ class GRPOTrainer(Trainer):
                         "step": [str(self.state.global_step)] * len(rewards),
                         "prompt": prompts_to_log,
                         "completion": completions_to_log,
-                        "reward": rewards.tolist(),
+                        "reward": rewards_to_log,
                     }
                     df = pd.DataFrame(table)
                     wandb.log({"completions": wandb.Table(dataframe=df)})
