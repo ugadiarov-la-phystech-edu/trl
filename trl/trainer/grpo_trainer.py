@@ -940,7 +940,7 @@ class GRPOTrainer(Trainer):
 
                     # For logging
                     table = {
-                        "step": [str(self.state.global_step)] * len(rewards),
+                        "step": [str(self.state.global_step)] * len(rewards_to_log),
                         "prompt": prompts_to_log,
                         "completion": completions_to_log,
                         "reward": rewards_to_log,
