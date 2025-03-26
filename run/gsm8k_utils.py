@@ -73,7 +73,7 @@ def strict_reward_func(completions: List[str], answer, **kwargs):
     rewards = []
     r = 1 / 12
     tags = ["<reasoning>", "</reasoning>", "<answer>", "</answer>"]
-    for response, answer in zip(responses, answer):
+    for response, a in zip(responses, answer):
         score = 0.0
         reasoning_open_index = response.find("<reasoning>")
         if reasoning_open_index > -1:
@@ -113,7 +113,7 @@ def strict_reward_func(completions: List[str], answer, **kwargs):
                 score += r
 
                 answer_number = extract_single_number(answer_text)
-                if answer_number is not None and answer_number == float(answer):
+                if answer_number is not None and answer_number == float(a.replace(',', "")):
                     score += 1
 
         if reasoning_close_index > -1 and answer_open_index > -1:
