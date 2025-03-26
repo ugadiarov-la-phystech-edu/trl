@@ -15,6 +15,7 @@
 import contextlib
 import functools
 import os
+import random
 import textwrap
 import warnings
 from collections import defaultdict
@@ -917,6 +918,14 @@ class GRPOTrainer(Trainer):
             prompts_to_log = gather_object(prompts_text)
             completions_to_log = gather_object(completions_text)
             rewards_to_log = rewards.tolist()
+
+            n_samples = self.args.per_device_train_batch_size // self.num_generations
+            relative_ids = [random.randrange(self.num_generations) for _ in range(n_samples)]
+            sample_ids = [relative_id + i * self.num_generations for i, relative_id in enumerate(relative_ids)]
+
+            prompts_to_log = [prompts_to_log[i] for i in sample_ids]
+            completions_to_log = [completions_to_log[i] for i in sample_ids]
+            rewards_to_log = [rewards_to_log[i] for i in sample_ids]
 
             if self.accelerator.is_main_process:
                 if is_rich_available():
