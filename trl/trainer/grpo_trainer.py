@@ -920,7 +920,9 @@ class GRPOTrainer(Trainer):
             completions_to_log = gather_object(completions_text)
             rewards_to_log = rewards.tolist()
 
-            sample_ids = [random.randrange(len(prompts_to_log))]
+            num_samples = self.args.per_device_train_batch_size // self.num_generations
+            relative_ids = [random.randrange(self.num_generations) for _ in range(num_samples)]
+            sample_ids = [relative_id + i * self.num_generations for i, relative_id in enumerate(relative_ids)]
 
             prompts_to_log = [prompts_to_log[i] for i in sample_ids]
             completions_to_log = [completions_to_log[i] for i in sample_ids]
