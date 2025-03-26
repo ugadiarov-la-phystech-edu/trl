@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import collections
 import contextlib
 import functools
 import os
@@ -407,6 +407,11 @@ class GRPOTrainer(Trainer):
 
         # Initialize the metrics
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
+        history_length = 100 * self.num_generations
+        self._metrics["train"]["reward_mean"] = collections.deque(maxlen=history_length)
+        self._metrics["eval"]["reward_mean"] = collections.deque(maxlen=history_length)
+        self._metrics["train"]["accuracy_mean"] = collections.deque(maxlen=history_length)
+        self._metrics["eval"]["accuracy_mean"] = collections.deque(maxlen=history_length)
         self.log_completions = args.log_completions
 
         super().__init__(
@@ -914,6 +919,8 @@ class GRPOTrainer(Trainer):
             self._metrics[mode][f"rewards/{reward_func_name}"].append(mean_rewards)
         self._metrics[mode]["reward"].append(rewards.mean().item())
         self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
+        self._metrics[mode]["reward_mean"].extend(rewards.tolist())
+        self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
 
         if self.log_completions and self.state.global_step % self.args.logging_steps == 0 and random.random() <= 1 / self.args.gradient_accumulation_steps:
             prompts_to_log = gather_object(prompts_text)
@@ -1032,7 +1039,9 @@ class GRPOTrainer(Trainer):
             super().log(logs, start_time)
         else:  # transformers<=4.46
             super().log(logs)
-        self._metrics[mode].clear()
+        for key in list(self._metrics[mode].keys()):
+            if key not in ('reward_mean', 'accuracy_mean'):
+                del self._metrics[mode][key]
 
     def create_model_card(
         self,
