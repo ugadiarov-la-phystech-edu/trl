@@ -51,7 +51,7 @@ def contains_any(string: str, substrings: Collection[str]):
     return False
 
 
-def strict_reward_func(completions: List[str], answers, **kwargs):
+def strict_reward_func(completions: List[str], answer, **kwargs):
     """
     Assigns a reward for adhering to the desired XML format.
 
