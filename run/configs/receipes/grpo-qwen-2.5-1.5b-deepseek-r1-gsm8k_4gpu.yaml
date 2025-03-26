@@ -27,6 +27,7 @@ warmup_ratio: 0.03
 beta: 0.04 # 0.04 as in the deepseek math paper 0.001 from https://hijkzzz.notion.site/unraveling-rlhf-and-its-variants-engineering-insights#147d9a33ecc9806090f3d5c749d31f05
 num_iterations: 1
 epsilon: 0.1
+scale_rewards: false
 max_prompt_length: 1024
 max_completion_length: 1024
 num_generations: 32
@@ -35,6 +36,8 @@ use_vllm: true
 vllm_gpu_memory_utilization: 0.5
 
 # Logging arguments
+log_completions: true
+num_completions_to_print: 0
 logging_strategy: steps
 logging_steps: 1
 report_to:
