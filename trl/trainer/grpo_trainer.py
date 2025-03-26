@@ -725,6 +725,7 @@ class GRPOTrainer(Trainer):
     ) -> dict[str, Union[torch.Tensor, Any]]:
         device = self.accelerator.device
         prompts = [x["prompt"] for x in inputs]
+        answers = [x["answer"] for x in inputs]
         prompts_text = [maybe_apply_chat_template(example, self.processing_class)["prompt"] for example in inputs]
         prompt_inputs = self.processing_class(
             text=prompts_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
@@ -924,6 +925,8 @@ class GRPOTrainer(Trainer):
             prompts_to_log = [prompts_to_log[i] for i in sample_ids]
             completions_to_log = [completions_to_log[i] for i in sample_ids]
             rewards_to_log = [rewards_to_log[i] for i in sample_ids]
+            answers_to_log = [answers[i] for i in sample_ids]
+            is_correct_to_log = [reward > 1 for reward in rewards_to_log]
 
             if self.accelerator.is_main_process:
                 if is_rich_available():
@@ -940,7 +943,9 @@ class GRPOTrainer(Trainer):
                     table = {
                         "step": [str(self.state.global_step)] * len(rewards_to_log),
                         "prompt": prompts_to_log,
+                        "answer": answers_to_log,
                         "completion": completions_to_log,
+                        "is_correct": is_correct_to_log,
                         "reward": rewards_to_log,
                     }
                     df = pd.DataFrame(table)
