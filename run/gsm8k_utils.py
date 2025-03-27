@@ -209,6 +209,90 @@ def strict_answer_reward_func(completions: List[str], answer, **kwargs):
     return rewards
 
 
+def semi_strict_answer_reward_func(completions: List[str], answer, **kwargs):
+    """
+    Assigns a reward for adhering to the desired XML format.
+
+    Args:
+       completions (list): List of model completions, each containing content.
+       **kwargs: Additional keyword arguments.
+
+    Returns:
+       list: List of format compliance scores for each completion.
+
+    Explanation:
+       1. Extracts the content from each completion.
+       2. Evaluates format compliance by checking for required XML tags:
+          - 0.2 points for each tag present (<reasoning>, </reasoning>, <answer>, </answer>)
+          - Maximum score of 0.8 for perfect format compliance
+       3. Stores and returns the format compliance scores.
+    """
+    responses = completions
+    rewards = []
+    r = 1 / 12
+    tags = ["<reasoning>", "</reasoning>", "<answer>", "</answer>"]
+    for response, a in zip(responses, answer):
+        score = 0.0
+        reasoning_open_index = response.find("<reasoning>")
+        if reasoning_open_index > -1:
+            score += r
+
+            if response[:reasoning_open_index].strip() == "":
+                score += r
+
+        reasoning_close_index = response.rfind("</reasoning>")
+        if reasoning_close_index > -1:
+            score += r
+
+        if reasoning_open_index > -1 and reasoning_close_index > -1:
+            if reasoning_open_index < reasoning_close_index:
+                score += r
+
+            if not contains_any(response[reasoning_open_index + len("<reasoning>"):reasoning_close_index], tags):
+                score += r
+
+        answer_open_index = response.find("<answer>")
+        if answer_open_index > -1:
+            score += r
+
+        answer_close_index = response.rfind("</answer>")
+        if answer_close_index > -1:
+            score += r
+
+            if response[answer_close_index + len("</answer>"):].strip() == "":
+                score += r
+
+        if answer_open_index > -1 and answer_close_index > -1:
+            if answer_open_index < answer_close_index:
+                score += r
+
+            answer_text = response[answer_open_index + len("<answer>"):answer_close_index].strip()
+            if not contains_any(answer_text, tags):
+                score += r
+
+                answer_number = extract_single_number(answer_text)
+                gt_number = float(a.replace(',', ""))
+                if answer_number is not None and answer_number == gt_number:
+                    score += 0.5
+
+                    try:
+                        float(answer_text)
+                        score += 0.5
+                    except ValueError:
+                        pass
+
+        if reasoning_close_index > -1 and answer_open_index > -1:
+            if reasoning_close_index < answer_open_index:
+                score += r
+
+                if response[reasoning_close_index + len("</reasoning>"):answer_open_index].strip() == "":
+                    score += r
+
+        rewards.append(score)
+
+    return rewards
+
+
 if __name__ == '__main__':
     example = """
     
