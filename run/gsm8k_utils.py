@@ -273,11 +273,11 @@ def semi_strict_answer_reward_func(completions: List[str], answer, **kwargs):
                 answer_number = extract_single_number(answer_text)
                 gt_number = float(a.replace(',', ""))
                 if answer_number is not None and answer_number == gt_number:
-                    score += 0.5
+                    score += 1
 
                     try:
                         float(answer_text)
-                        score += 0.5
+                        score += 1
                     except ValueError:
                         pass
 
@@ -288,6 +288,7 @@ def semi_strict_answer_reward_func(completions: List[str], answer, **kwargs):
                 if response[reasoning_close_index + len("</reasoning>"):answer_open_index].strip() == "":
                     score += r
 
+        score /= 2
         rewards.append(score)
 
     return rewards
