@@ -317,6 +317,12 @@ class GRPOConfig(TrainingArguments):
             "rewards are weighted equally with weight `1.0`."
         },
     )
+    dense_reward: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether reward is calculated for every step (token)"
+        },
+    )
     sync_ref_model: bool = field(
         default=False,
         metadata={

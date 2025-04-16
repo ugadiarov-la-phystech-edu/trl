@@ -128,6 +128,14 @@ def strict_reward_func(completions: List[str], answer, **kwargs):
     return rewards
 
 
+def dense_strict_reward_func(completions: List[List[str]], answer, **kwargs):
+    rewards = []
+    for step_completion in completions:
+        rewards.append(strict_reward_func(step_completion, answer))
+
+    return rewards
+
+
 def strict_answer_reward_func(completions: List[str], answer, **kwargs):
     """
     Assigns a reward for adhering to the desired XML format.

@@ -375,6 +375,7 @@ class GRPOTrainer(Trainer):
                 reward_func.config.pad_token_id = reward_processing_class.pad_token_id
                 reward_processing_classes[i] = reward_processing_class
         self.reward_processing_classes = reward_processing_classes
+        self.dense_reward = args.dense_reward
 
         # Data collator
         def data_collator(features):  # No data collation is needed in GRPO
@@ -835,7 +836,11 @@ class GRPOTrainer(Trainer):
         else:
             completions = completions_text
 
-        rewards_per_func = torch.zeros(len(prompts), len(self.reward_funcs), device=device)
+        if self.dense_reward:
+            rewards_per_func = torch.zeros(len(prompts), len(self.reward_funcs), completion_ids.size(1), device=device)
+        else:
+            rewards_per_func = torch.zeros(len(prompts), len(self.reward_funcs), device=device)
+
         for i, (reward_func, reward_processing_class) in enumerate(
             zip(self.reward_funcs, self.reward_processing_classes)
         ):
@@ -847,6 +852,9 @@ class GRPOTrainer(Trainer):
                 if isinstance(
                     reward_func, nn.Module
                 ):  # Module instead of PretrainedModel for compat with compiled models
+                    if self.dense_reward:
+                        raise ValueError('Only rule-based dense reward functions are supported')
+
                     if is_conversational(inputs[0]):
                         messages = [{"messages": p + c} for p, c in zip(prompts, completions)]
                         texts = [apply_chat_template(x, reward_processing_class)["text"] for x in messages]
@@ -862,14 +870,29 @@ class GRPOTrainer(Trainer):
                     # Repeat all input columns (but "prompt" and "completion") to match the number of generations
                     keys = [key for key in inputs[0] if key not in ["prompt", "completion"]]
                     reward_kwargs = {key: [example[key] for example in inputs] for key in keys}
-                    output_reward_func = reward_func(prompts=prompts, completions=completions, **reward_kwargs)
-                    # Convert None values to NaN
-                    output_reward_func = [reward if reward is not None else torch.nan for reward in output_reward_func]
 
-                    rewards_per_func[:, i] = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
+                    if self.dense_reward:
+                        completions_by_step = []
+                        for step in range(completion_ids.size(1)):
+                            completions_step = self.processing_class.batch_decode(completion_ids[:, :step + 1], skip_special_tokens=True)
+                            completions_by_step.append(completions_step)
+
+                        output_reward_func = reward_func(prompts=prompts, completions=completions_by_step, **reward_kwargs)
+                        output_reward_func = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
+
+                        rewards_per_func[:, i] = output_reward_func
+                    else:
+                        output_reward_func = reward_func(prompts=prompts, completions=completions, **reward_kwargs)
+                        # Convert None values to NaN
+                        output_reward_func = [reward if reward is not None else torch.nan for reward in output_reward_func]
+
+                        rewards_per_func[:, i] = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
 
         # If all reward functions return None for a given row, issue a detailed warning
         if torch.isnan(rewards_per_func).all(dim=1).any():
+            if self.dense_reward:
+                raise ValueError('Dense reward must not be NaN')
+
             nan_row_idx = torch.isnan(rewards_per_func).all(dim=1).nonzero(as_tuple=True)[0][0]
             row_reward_kwargs = {key: value[nan_row_idx] for key, value in reward_kwargs.items()}
             row_reward_kwargs["prompt"] = prompts[nan_row_idx]
@@ -884,16 +907,32 @@ class GRPOTrainer(Trainer):
         rewards_per_func = gather(rewards_per_func)
 
         # Apply weights to each reward function's output and sum
-        rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
 
-        # Compute grouped-wise rewards
-        mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
-        std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
+        if self.dense_reward:
+            reward_weights =  self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
+            rewards = (rewards_per_func * reward_weights).nansum(dim=1)
+            mean_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).mean(dim=1)
+            std_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).std(dim=1)
 
-        # Normalize the rewards to compute the advantages
-        mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-        std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-        advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+            # Normalize the rewards to compute the advantages
+            mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
+            std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
+            advantages = (rewards - mean_grouped_rewards.unsqueeze(-1)) / (std_grouped_rewards.unsqueeze(-1) + 1e-4)
+
+        else:
+            reward_weights = self.reward_weights.to(device).unsqueeze(0)
+            rewards = (rewards_per_func * reward_weights).nansum(dim=1)
+
+            # Compute grouped-wise rewards
+            mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
+            std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
+
+            # Normalize the rewards to compute the advantages
+            mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
+            std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
+            advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+            advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
+
 
         # Slice to keep only the local part of the data
         process_slice = slice(
@@ -915,12 +954,29 @@ class GRPOTrainer(Trainer):
             else:
                 reward_func_name = reward_func.__name__
             # Only calculate mean for samples where this reward function was applied (non-NaN values)
-            mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()
+            if self.dense_reward:
+                mean_rewards = torch.nanmean(rewards_per_func[:, i].sum(dim=-1)).item()
+            else:
+                mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()
+
             self._metrics[mode][f"rewards/{reward_func_name}"].append(mean_rewards)
-        self._metrics[mode]["reward"].append(rewards.mean().item())
-        self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
-        self._metrics[mode]["reward_mean"].extend(rewards.tolist())
-        self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
+            if 'answer' in reward_func_name:
+                accuracy_type = reward_func_name[len('reward_answer_'):]
+                if self.dense_reward:
+                    hits = torch.any(rewards_per_func[:, i] > 0, dim=1)
+                else:
+                    hits = rewards_per_func[:, i] > 0
+                self._metrics[mode][f"accuracy/{accuracy_type}"].append(hits.mean(dtype=torch.float32))
+
+        if self.dense_reward:
+            self._metrics[mode]["reward"].append(rewards.sum(dim=-1).mean().item())
+            self._metrics[mode]["reward_std"].append(std_grouped_rewards.sum(dim=-1).mean().item())
+            self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
+        else:
+            self._metrics[mode]["reward"].append(rewards.mean().item())
+            self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
+            self._metrics[mode]["reward_mean"].extend(rewards.tolist())
+            self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
 
         if self.log_completions and self.state.global_step % self.args.logging_steps == 0 and random.random() <= 1 / self.args.gradient_accumulation_steps:
             prompts_to_log = gather_object(prompts_text)
@@ -993,13 +1049,16 @@ class GRPOTrainer(Trainer):
 
         # Compute the loss
         advantages = inputs["advantages"]
+        if not self.dense_reward:
+            advantages = advantages.unsqueeze(1)
+
         # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's computation (see
         # _generate_and_score_completions) and use per_token_logps.detach() instead.
         old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
         coef_1 = torch.exp(per_token_logps - old_per_token_logps)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon_low, 1 + self.epsilon_high)
-        per_token_loss1 = coef_1 * advantages.unsqueeze(1)
-        per_token_loss2 = coef_2 * advantages.unsqueeze(1)
+        per_token_loss1 = coef_1 * advantages
+        per_token_loss2 = coef_2 * advantages
         per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
         if self.beta != 0.0:
             per_token_loss = per_token_loss + self.beta * per_token_kl
