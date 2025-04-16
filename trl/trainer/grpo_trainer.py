@@ -918,7 +918,7 @@ class GRPOTrainer(Trainer):
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             advantages = (rewards - mean_grouped_rewards.unsqueeze(-1)) / (std_grouped_rewards.unsqueeze(-1) + 1e-4)
-
+            advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
         else:
             reward_weights = self.reward_weights.to(device).unsqueeze(0)
             rewards = (rewards_per_func * reward_weights).nansum(dim=1)
@@ -931,7 +931,6 @@ class GRPOTrainer(Trainer):
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
-            advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
 
 
         # Slice to keep only the local part of the data
