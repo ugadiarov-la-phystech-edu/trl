@@ -880,7 +880,7 @@ class GRPOTrainer(Trainer):
                         output_reward_func = reward_func(prompts=prompts, completions=completions_by_step, **reward_kwargs)
                         output_reward_func = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
 
-                        rewards_per_func[:, i] = output_reward_func
+                        rewards_per_func[:, i] = output_reward_func.movedim(0, -1)
                     else:
                         output_reward_func = reward_func(prompts=prompts, completions=completions, **reward_kwargs)
                         # Convert None values to NaN
