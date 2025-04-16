@@ -911,13 +911,14 @@ class GRPOTrainer(Trainer):
         if self.dense_reward:
             reward_weights =  self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
             rewards = (rewards_per_func * reward_weights).nansum(dim=1)
-            mean_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).mean(dim=1)
-            std_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).std(dim=1)
+            mean_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).mean(dim=(1, 2))
+            std_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).std(dim=(1, 2))
 
             # Normalize the rewards to compute the advantages
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-            advantages = (rewards - mean_grouped_rewards.unsqueeze(-1)) / (std_grouped_rewards.unsqueeze(-1) + 1e-4)
+            advantages = (rewards - mean_grouped_rewards.unsqueeze(1)) / (std_grouped_rewards.unsqueeze(1) + 1e-4)
+            advantages = advantages * completion_mask
             advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
         else:
             reward_weights = self.reward_weights.to(device).unsqueeze(0)
