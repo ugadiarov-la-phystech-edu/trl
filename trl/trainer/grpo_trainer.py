@@ -971,7 +971,6 @@ class GRPOTrainer(Trainer):
         if self.dense_reward:
             self._metrics[mode]["reward"].append(rewards.sum(dim=-1).mean().item())
             self._metrics[mode]["reward_std"].append(std_grouped_rewards.sum(dim=-1).mean().item())
-            self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
         else:
             self._metrics[mode]["reward"].append(rewards.mean().item())
             self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
