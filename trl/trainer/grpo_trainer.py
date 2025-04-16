@@ -960,7 +960,7 @@ class GRPOTrainer(Trainer):
                 mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()
 
             self._metrics[mode][f"rewards/{reward_func_name}"].append(mean_rewards)
-            if 'answer' in reward_func_name:
+            if 'reward_answer_' in reward_func_name:
                 accuracy_type = reward_func_name[len('reward_answer_'):]
                 if self.dense_reward:
                     hits = torch.any(rewards_per_func[:, i] > 0, dim=1)
