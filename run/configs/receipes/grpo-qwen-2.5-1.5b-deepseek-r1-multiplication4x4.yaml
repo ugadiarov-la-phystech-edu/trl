@@ -15,7 +15,8 @@ dataset_id_or_path: booydar/multiplication_4x4
 
 # Training arguments
 num_train_epochs: 100
-per_device_train_batch_size: 16
+per_device_train_batch_size: 24
+per_device_eval_batch_size: 24
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
@@ -29,13 +30,18 @@ num_iterations: 1
 epsilon: 0.1
 #scale_rewards: false
 dense_reward: true
-reward_weights: [0.14285714285, 0.14285714285, 0.14285714285, 1, 1]
+reward_weights: [0.14285714285, 0.14285714285, 0.14285714285, 1, 1, 1]
 max_prompt_length: 1024
 max_completion_length: 1024
 num_generations: 8
 use_vllm: true
 # vllm_device: "cuda:3"
 vllm_gpu_memory_utilization: 0.5
+
+# evaluation
+eval_strategy: "no"
+# eval_steps: 1000
+# eval_on_start: true
 
 # Logging arguments
 log_completions: true

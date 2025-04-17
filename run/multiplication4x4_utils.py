@@ -3,6 +3,7 @@ from typing import List
 
 
 WHITESPACE = re.compile('\\s')
+INTEGER = re.compile('(\\d+)')
 
 
 def reward_step_answer(completions: List[List[str]], answer, **kwargs):
@@ -22,7 +23,12 @@ def reward_step_answer(completions: List[List[str]], answer, **kwargs):
             reward = 0
             for i, sa in enumerate(step_answer):
                 if not completion_answer[i]:
-                    has_step_answer = sa in completion
+                    has_step_answer = False
+                    index = completion.find(sa)
+                    if index > -1:
+                        match = INTEGER.match(completion[index:])
+                        has_step_answer = match is not None and match.group(1) == sa
+
                     completion_answer[i] = has_step_answer
                     reward += float(has_step_answer)
 
@@ -109,7 +115,12 @@ def reward_answer_number(completions: List[List[str]], answer, **kwargs):
             reward = 0.
             for i, sa in enumerate(step_answer):
                 if not completion_answer[i]:
-                    has_step_answer = sa in completion
+                    has_step_answer = False
+                    index = completion.find(sa)
+                    if index > -1:
+                        match = INTEGER.match(completion[index:])
+                        has_step_answer = match is not None and match.group(1) == sa
+
                     completion_answer[i] = has_step_answer
                     reward += float(has_step_answer)
 
@@ -150,6 +161,23 @@ def reward_answer_tag(completions: List[List[str]], answer, **kwargs):
     return rewards
 
 
+def reward_response_length(completions: List[List[str]], answer, **kwargs):
+    n_generations = len(completions[0])
+    assert len(answer) == n_generations
+
+    rewards = [[0] * n_generations for _ in range(len(completions))]
+    for i, (a, completion) in enumerate(zip(answer, completions[-1])):
+        n_completion_lines = len(completion.split('\n'))
+        n_answer_lines = len(a.split('\n'))
+        rew = n_completion_lines / n_answer_lines
+        if rew > 1:
+            rew = 1 / rew
+
+        rewards[-1][i] = rew
+
+    return rewards
+
+
 if __name__ == '__main__':
     completions = [
         ['a', 'b', 'c'], ['a ', 'b ', 'c '], ['a *', 'b +', 'c -'], ['a * ', 'b + ', 'c - '], ['a * 1', 'b + 2', 'c - 3'],
@@ -163,3 +191,4 @@ if __name__ == '__main__':
     print(reward_step_tag(completions, answer))
     print(reward_answer_number(completions, answer))
     print(reward_answer_tag(completions, answer))
+    print(reward_response_length(completions, answer))

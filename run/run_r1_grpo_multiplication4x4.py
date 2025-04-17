@@ -1,13 +1,10 @@
-import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime
 import logging
 import os
 
-from run.gsm8k_utils import strict_answer_reward_func
 from run.multiplication4x4_utils import reward_step_answer, reward_step_expression, reward_step_tag, \
-    reward_answer_number, reward_answer_tag
+    reward_answer_number, reward_answer_tag, reward_response_length
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import random
@@ -86,6 +83,7 @@ def grpo_function(
         ),
         revision=model_args.model_revision,
         trust_remote_code=model_args.trust_remote_code,
+        padding_size='left',
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -106,12 +104,23 @@ def grpo_function(
     def generate_r1_prompt(example):
         multiplier, multiplicand = example['task'][::-1].replace(' ', '').split('*')
         answer = example['labels'][::-1].replace(' ', '')
-        assert int(multiplicand) * int(multiplier) == int(answer)
+        multiplier_num = int(multiplier)
+        multiplicand_num = int(multiplicand)
+        answer_num = int(answer)
+        assert multiplicand_num * multiplier_num == answer_num
+
         gt_step_strings = []
+        step_answers_num = []
         for place, digit in enumerate(multiplier[::-1]):
-            place_value = f'{digit}{"0" * place}'
-            step_answer = int(multiplicand) * int(place_value)
-            gt_step_strings.append(f'{multiplicand} * {place_value} = {step_answer}')
+            place_value_num = int(f'{digit}{"0" * place}')
+            step_mult_answer_num = int(multiplicand) * place_value_num
+            step_answers_num.append(step_mult_answer_num)
+            gt_step_strings.append(f'{multiplicand} * {place_value_num} = {step_mult_answer_num}')
+            if place > 0:
+                step_sum_answer_num = step_answers_num[-2] + step_mult_answer_num
+                gt_step_strings.append(f'{step_answers_num[-2]} + {step_mult_answer_num} = {step_sum_answer_num}')
+                step_answers_num.append(step_sum_answer_num)
+
         gt_steps = '\n'.join(gt_step_strings)
         return {'prompt': f'{SYSTEM_PROMPT.strip()}\nTask: {multiplicand} * {multiplier}',
                 'answer': f'{gt_steps}\n{answer}'}
@@ -126,8 +135,10 @@ def grpo_function(
 
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
-        reward_funcs=[reward_step_answer, reward_step_expression, reward_step_tag, reward_answer_number, reward_answer_tag,],
+        reward_funcs=[reward_step_answer, reward_step_expression, reward_step_tag, reward_answer_number,
+                      reward_answer_tag, reward_response_length, ],
         args=training_args,
+        processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
         peft_config=get_peft_config(model_args),

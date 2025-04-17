@@ -407,10 +407,11 @@ class GRPOTrainer(Trainer):
         model.warnings_issued["estimate_tokens"] = True
 
         # Initialize the metrics
-        self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
         history_length = 100 * self.num_generations
-        self._metrics["train"] = collections.defaultdict(default_factory=lambda : collections.deque(maxlen=history_length))
-        self._metrics["eval"] = collections.defaultdict(default_factory=lambda : collections.deque(maxlen=10 * history_length))
+        self._metrics = {
+            "train": collections.defaultdict(lambda : collections.deque(maxlen=history_length)),
+            "eval": collections.defaultdict(lambda : collections.deque(maxlen=10 * history_length))
+        }
         self.log_completions = args.log_completions
 
         super().__init__(
@@ -907,17 +908,27 @@ class GRPOTrainer(Trainer):
         # Apply weights to each reward function's output and sum
 
         if self.dense_reward:
-            reward_weights =  self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
+            reward_weights = self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
             rewards = (rewards_per_func * reward_weights).nansum(dim=1)
-            mean_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).mean(dim=(1, 2))
-            std_grouped_rewards = rewards.view(-1, self.num_generations, completion_ids.size(1)).std(dim=(1, 2))
+            completion_mask_gathered = gather(completion_mask)
+            completion_mask_by_prompt = completion_mask_gathered.view(-1, self.num_generations, completion_mask.size(1))
+            mean_grouped_rewards = torch.sum(
+                rewards.reshape_as(completion_mask_by_prompt) * completion_mask_by_prompt,
+                dim=(1, 2)
+            ) / completion_mask_by_prompt.sum(dim=(1, 2))
 
-            # Normalize the rewards to compute the advantages
+            # Compute and normalize the advantages
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-            std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-            advantages = (rewards - mean_grouped_rewards.unsqueeze(1)) / (std_grouped_rewards.unsqueeze(1) + 1e-4)
-            advantages = advantages * completion_mask
+            advantages = (rewards - mean_grouped_rewards.unsqueeze(1)) * completion_mask_gathered
             advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
+            # Compute variance: V(adv) = E(adv * adv) - E(adv) * E(adv) = E(adv * adv) as long as E(adv) = 0
+            variance_grouped_advantages = torch.sum(
+                (advantages * advantages).reshape_as(completion_mask_by_prompt) * completion_mask_by_prompt,
+                dim=(1, 2)
+            ) / completion_mask_by_prompt.sum(dim=(1, 2))
+            std_grouped_advantages = variance_grouped_advantages ** 0.5
+            std_grouped_advantages = std_grouped_advantages.repeat_interleave(self.num_generations, dim=0)
+            advantages = advantages / (std_grouped_advantages.unsqueeze(1) + 1e-4)
         else:
             reward_weights = self.reward_weights.to(device).unsqueeze(0)
             rewards = (rewards_per_func * reward_weights).nansum(dim=1)
@@ -968,7 +979,7 @@ class GRPOTrainer(Trainer):
 
         if self.dense_reward:
             self._metrics[mode]["reward"].append(rewards.sum(dim=-1).mean().item())
-            self._metrics[mode]["reward_std"].append(std_grouped_rewards.sum(dim=-1).mean().item())
+            self._metrics[mode]["reward_std"].append(rewards.sum(dim=-1).std().item())
         else:
             self._metrics[mode]["reward"].append(rewards.mean().item())
             self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
@@ -976,7 +987,23 @@ class GRPOTrainer(Trainer):
         if self.log_completions and self.state.global_step % self.args.logging_steps == 0 and random.random() <= 1 / self.args.gradient_accumulation_steps:
             prompts_to_log = gather_object(prompts_text)
             completions_to_log = gather_object(completions_text)
-            rewards_to_log = rewards.tolist()
+            if self.dense_reward:
+                rewards_to_log = rewards.sum(dim=-1).tolist()
+            else:
+                rewards_to_log = rewards.tolist()
+
+            reward_funcs_to_log = {}
+            for i, reward_func in enumerate(self.reward_funcs):
+                if isinstance(reward_func,
+                              nn.Module):  # Module instead of PretrainedModel for compat with compiled models
+                    reward_func_name = reward_func.config._name_or_path.split("/")[-1]
+                else:
+                    reward_func_name = reward_func.__name__
+                # Only calculate mean for samples where this reward function was applied (non-NaN values)
+                if self.dense_reward:
+                    reward_funcs_to_log[reward_func_name] = rewards_per_func[:, i].sum(dim=-1).tolist()
+                else:
+                    reward_funcs_to_log[reward_func_name] = rewards_per_func[:, i].tolist()
 
             num_samples = self.args.per_device_train_batch_size // self.num_generations
             relative_ids = [random.randrange(self.num_generations) for _ in range(num_samples)]
@@ -984,9 +1011,9 @@ class GRPOTrainer(Trainer):
 
             prompts_to_log = [prompts_to_log[i] for i in sample_ids]
             completions_to_log = [completions_to_log[i] for i in sample_ids]
-            rewards_to_log = [rewards_to_log[i] for i in sample_ids]
             answers_to_log = [answers[i] for i in sample_ids]
-            is_correct_to_log = [reward > 1 for reward in rewards_to_log]
+            rewards_to_log = [rewards_to_log[i] for i in sample_ids]
+            reward_funcs_to_log = {key: [value[i] for i in sample_ids] for key, value in reward_funcs_to_log.items()}
 
             if self.accelerator.is_main_process:
                 if is_rich_available():
@@ -1005,9 +1032,9 @@ class GRPOTrainer(Trainer):
                         "prompt": prompts_to_log,
                         "answer": answers_to_log,
                         "completion": completions_to_log,
-                        "is_correct": is_correct_to_log,
                         "reward": rewards_to_log,
                     }
+                    table.update(reward_funcs_to_log)
                     df = pd.DataFrame(table)
                     key = f'{mode}/completions'
                     if mode == 'eval':
