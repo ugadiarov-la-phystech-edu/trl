@@ -409,10 +409,8 @@ class GRPOTrainer(Trainer):
         # Initialize the metrics
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
         history_length = 100 * self.num_generations
-        self._metrics["train"]["reward_mean"] = collections.deque(maxlen=history_length)
-        self._metrics["eval"]["reward_mean"] = collections.deque(maxlen=history_length)
-        self._metrics["train"]["accuracy_mean"] = collections.deque(maxlen=history_length)
-        self._metrics["eval"]["accuracy_mean"] = collections.deque(maxlen=history_length)
+        self._metrics["train"] = collections.defaultdict(default_factory=lambda : collections.deque(maxlen=history_length))
+        self._metrics["eval"] = collections.defaultdict(default_factory=lambda : collections.deque(maxlen=10 * history_length))
         self.log_completions = args.log_completions
 
         super().__init__(
@@ -971,13 +969,9 @@ class GRPOTrainer(Trainer):
         if self.dense_reward:
             self._metrics[mode]["reward"].append(rewards.sum(dim=-1).mean().item())
             self._metrics[mode]["reward_std"].append(std_grouped_rewards.sum(dim=-1).mean().item())
-            self._metrics[mode]["reward_mean"].extend(rewards.sum(dim=-1).tolist())
-            self._metrics[mode]["accuracy_mean"].extend((rewards.sum(dim=-1) > 1).to(int).tolist())
         else:
             self._metrics[mode]["reward"].append(rewards.mean().item())
             self._metrics[mode]["reward_std"].append(std_grouped_rewards.mean().item())
-            self._metrics[mode]["reward_mean"].extend(rewards.tolist())
-            self._metrics[mode]["accuracy_mean"].extend((rewards > 1).to(int).tolist())
 
         if self.log_completions and self.state.global_step % self.args.logging_steps == 0 and random.random() <= 1 / self.args.gradient_accumulation_steps:
             prompts_to_log = gather_object(prompts_text)
@@ -1015,7 +1009,10 @@ class GRPOTrainer(Trainer):
                         "reward": rewards_to_log,
                     }
                     df = pd.DataFrame(table)
-                    wandb.log({"completions": wandb.Table(dataframe=df)})
+                    key = f'{mode}/completions'
+                    if mode == 'eval':
+                        key = f'{key}_{self.state.global_step:06d}'
+                    wandb.log({key: wandb.Table(dataframe=df)})
 
         return {
             "prompt_ids": prompt_ids,
@@ -1099,9 +1096,6 @@ class GRPOTrainer(Trainer):
             super().log(logs, start_time)
         else:  # transformers<=4.46
             super().log(logs)
-        for key in list(self._metrics[mode].keys()):
-            if key not in ('reward_mean', 'accuracy_mean'):
-                del self._metrics[mode][key]
 
     def create_model_card(
         self,
