@@ -910,8 +910,7 @@ class GRPOTrainer(Trainer):
         if self.dense_reward:
             reward_weights = self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
             rewards = (rewards_per_func * reward_weights).nansum(dim=1)
-            completion_mask_gathered = gather(completion_mask)
-            completion_mask_by_prompt = completion_mask_gathered.view(-1, self.num_generations, completion_mask.size(1))
+            completion_mask_by_prompt = completion_mask.view(-1, self.num_generations, completion_mask.size(1))
             mean_grouped_rewards = torch.sum(
                 rewards.reshape_as(completion_mask_by_prompt) * completion_mask_by_prompt,
                 dim=(1, 2)
@@ -919,7 +918,7 @@ class GRPOTrainer(Trainer):
 
             # Compute and normalize the advantages
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-            advantages = (rewards - mean_grouped_rewards.unsqueeze(1)) * completion_mask_gathered
+            advantages = (rewards - mean_grouped_rewards.unsqueeze(1)) * completion_mask
             advantages = torch.cumsum(advantages.flip(dims=(1,)), dim=1).flip(dims=(1,))
             # Compute variance: V(adv) = E(adv * adv) - E(adv) * E(adv) = E(adv * adv) as long as E(adv) = 0
             variance_grouped_advantages = torch.sum(
@@ -1036,9 +1035,7 @@ class GRPOTrainer(Trainer):
                     }
                     table.update(reward_funcs_to_log)
                     df = pd.DataFrame(table)
-                    key = f'{mode}/completions'
-                    if mode == 'eval':
-                        key = f'{key}_{self.state.global_step:06d}'
+                    key = f'{mode}/completions_{self.state.global_step:06d}'
                     wandb.log({key: wandb.Table(dataframe=df)})
 
         return {
