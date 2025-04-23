@@ -975,7 +975,7 @@ class GRPOTrainer(Trainer):
                     hits = torch.any(rewards_per_func[:, i] > 0, dim=1)
                 else:
                     hits = rewards_per_func[:, i] > 0
-                self._metrics[mode][f"accuracy/{accuracy_type}"].append(hits.mean(dtype=torch.float32))
+                self._metrics[mode][f"accuracy/{accuracy_type}"].append(hits.mean(dtype=torch.float32).item())
 
         if self.dense_reward:
             self._metrics[mode]["reward"].append(rewards.sum(dim=-1).mean().item())
