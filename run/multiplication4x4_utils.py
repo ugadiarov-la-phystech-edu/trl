@@ -6,6 +6,10 @@ WHITESPACE = re.compile('\\s')
 INTEGER = re.compile('(\\d+)')
 
 
+def reward_step_answer_sparse(completions: List[str], answer, **kwargs):
+    return reward_step_answer([completions], answer, **kwargs)[0]
+
+
 def reward_step_answer(completions: List[List[str]], answer, **kwargs):
     n_generations = len(completions[0])
     step_answers = []
@@ -40,6 +44,10 @@ def reward_step_answer(completions: List[List[str]], answer, **kwargs):
     return rewards
 
 
+def reward_step_expression_sparse(completions: List[str], answer, **kwargs):
+    return reward_step_expression([completions], answer, **kwargs)[0]
+
+
 def reward_step_expression(completions: List[List[str]], answer, **kwargs):
     n_generations = len(completions[0])
     step_answers = []
@@ -69,6 +77,10 @@ def reward_step_expression(completions: List[List[str]], answer, **kwargs):
     return rewards
 
 
+def reward_step_tag_sparse(completions: List[str], answer, **kwargs):
+    return reward_step_tag([completions], answer, **kwargs)[0]
+
+
 def reward_step_tag(completions: List[List[str]], answer, **kwargs):
     n_generations = len(completions[0])
     step_answers = []
@@ -96,6 +108,10 @@ def reward_step_tag(completions: List[List[str]], answer, **kwargs):
         rewards.append(step_rewards)
 
     return rewards
+
+
+def reward_answer_number_sparse(completions: List[str], answer, **kwargs):
+    return reward_answer_number([completions], answer, **kwargs)[0]
 
 
 def reward_answer_number(completions: List[List[str]], answer, **kwargs):
@@ -131,6 +147,9 @@ def reward_answer_number(completions: List[List[str]], answer, **kwargs):
 
     return rewards
 
+def reward_answer_tag_sparse(completions: List[str], answer, **kwargs):
+    return reward_answer_tag([completions], answer, **kwargs)[0]
+
 
 def reward_answer_tag(completions: List[List[str]], answer, **kwargs):
     n_generations = len(completions[0])
@@ -161,6 +180,10 @@ def reward_answer_tag(completions: List[List[str]], answer, **kwargs):
     return rewards
 
 
+def reward_response_length_sparse(completions: List[str], answer, **kwargs):
+    return reward_response_length([completions], answer, **kwargs)[0]
+
+
 def reward_response_length(completions: List[List[str]], answer, **kwargs):
     n_generations = len(completions[0])
     assert len(answer) == n_generations
@@ -176,10 +199,6 @@ def reward_response_length(completions: List[List[str]], answer, **kwargs):
         rewards[-1][i] = rew
 
     return rewards
-
-
-def to_sparse(dense_reward_function):
-    return lambda completions, answer, **kwargs: dense_reward_function([completions], answer, **kwargs)[0]
 
 
 if __name__ == '__main__':

@@ -4,7 +4,9 @@ import logging
 import os
 
 from run.multiplication4x4_utils import reward_step_answer, reward_step_expression, reward_step_tag, \
-    reward_answer_number, reward_answer_tag, reward_response_length, to_sparse
+    reward_answer_number, reward_answer_tag, reward_response_length, reward_step_answer_sparse, \
+    reward_step_expression_sparse, reward_step_tag_sparse, reward_answer_number_sparse, reward_answer_tag_sparse, \
+    reward_response_length_sparse
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 import random
@@ -138,7 +140,8 @@ def grpo_function(
     reward_funcs = [reward_step_answer, reward_step_expression, reward_step_tag, reward_answer_number,
                       reward_answer_tag, reward_response_length, ]
     if not training_args.dense_reward:
-        reward_funcs = [to_sparse(f) for f in reward_funcs]
+        reward_funcs = [reward_step_answer_sparse, reward_step_expression_sparse, reward_step_tag_sparse,
+                        reward_answer_number_sparse, reward_answer_tag_sparse, reward_response_length_sparse, ]
 
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
