@@ -178,6 +178,10 @@ def reward_response_length(completions: List[List[str]], answer, **kwargs):
     return rewards
 
 
+def to_sparse(dense_reward_function):
+    return lambda completions, answer, **kwargs: dense_reward_function([completions], answer, **kwargs)[0]
+
+
 if __name__ == '__main__':
     completions = [
         ['a', 'b', 'c'], ['a ', 'b ', 'c '], ['a *', 'b +', 'c -'], ['a * ', 'b + ', 'c - '], ['a * 1', 'b + 2', 'c - 3'],
