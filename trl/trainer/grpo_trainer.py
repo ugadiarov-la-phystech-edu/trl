@@ -1043,7 +1043,7 @@ class GRPOTrainer(Trainer):
                     }
                     table.update(reward_funcs_to_log)
                     df = pd.DataFrame(table)
-                    key = f'{mode}/completions_{self.state.global_step:06d}'
+                    key = f'{mode}/completions/{self.state.global_step:06d}'
                     wandb.log({key: wandb.Table(dataframe=df)})
 
         return {
