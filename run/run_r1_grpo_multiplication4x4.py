@@ -88,6 +88,8 @@ def grpo_function(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    print(f'pad_token_id={tokenizer.pad_token_id} eos_token_id={tokenizer.eos_token_id}')
+
     ###############
     # Load datasets
     ###############

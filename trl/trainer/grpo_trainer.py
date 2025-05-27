@@ -798,6 +798,11 @@ class GRPOTrainer(Trainer):
         sequence_indices = torch.arange(is_eos.size(1), device=device).expand(is_eos.size(0), -1)
         completion_mask = (sequence_indices <= eos_idx.unsqueeze(1)).int()
 
+        is_end= torch.logical_or(is_eos, completion_ids == self.processing_class.pad_token_id)
+        end_idx = torch.full((is_end.size(0),), is_end.size(1), dtype=torch.long, device=device)
+        end_idx[is_end.any(dim=1)] = is_end.int().argmax(dim=1)[is_end.any(dim=1)]
+        end_mask = (sequence_indices <= end_idx.unsqueeze(1)).int()
+
         # Concatenate prompt_mask with completion_mask for logit computation
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
 
@@ -954,6 +959,9 @@ class GRPOTrainer(Trainer):
 
         completion_length = self.accelerator.gather_for_metrics(completion_mask.sum(1)).float().mean().item()
         self._metrics[mode]["completion_length"].append(completion_length)
+
+        completion_padding_removed_length = self.accelerator.gather_for_metrics(end_mask.sum(1)).float().mean().item()
+        self._metrics[mode]["completion_length_padding_removed"].append(completion_padding_removed_length)
 
         # Calculate mean reward per function, but only for samples where the function was applied
         for i, reward_func in enumerate(self.reward_funcs):
