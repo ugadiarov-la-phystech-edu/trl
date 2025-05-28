@@ -5,10 +5,10 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
 tf32: true
-output_dir: logs/qwen-2.5-1.5b-r1-multiplication2x2
+output_dir: logs/qwen-2.5-1.5b-r1-multiplication3x2
 
 # Dataset arguments
-dataset_id_or_path: elfray/multiplication_2x2
+dataset_id_or_path: elfray/multiplication_3x2
 
 # Lora Arguments
 # No LoRA is used here
