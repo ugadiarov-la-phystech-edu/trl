@@ -3,6 +3,10 @@ from datetime import datetime
 import logging
 import os
 
+import torch
+import numpy as np
+
+
 from run.multiplication4x4_utils import reward_step_answer, reward_step_expression, reward_step_tag, \
     reward_answer_number, reward_answer_tag, reward_response_length, reward_step_answer_sparse, \
     reward_step_expression_sparse, reward_step_tag_sparse, reward_answer_number_sparse, reward_answer_tag_sparse, \
@@ -198,6 +202,7 @@ def grpo_function(
 
 
 def main():
+    torch.serialization.add_safe_globals([np.core.multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.UInt32DType])
     parser = TrlParser((ModelConfig, ScriptArguments, GRPOConfig))
     model_args, script_args, training_args = parser.parse_args_and_config()
 
