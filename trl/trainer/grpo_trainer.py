@@ -972,10 +972,10 @@ class GRPOTrainer(Trainer):
         self._metrics[mode]['advantage_min'].append(advantage_min)
         self._metrics[mode]['advantage_std'].append(advantage_std)
 
-        self._step_metrics[mode]['advantage_mean'].append(advantage_mean)
-        self._step_metrics[mode]['advantage_max'].append(advantage_max)
-        self._step_metrics[mode]['advantage_min'].append(advantage_min)
-        self._step_metrics[mode]['advantage_std'].append(advantage_std)
+        self._step_metrics[mode]['step_advantage_mean'].append(advantage_mean)
+        self._step_metrics[mode]['step_advantage_max'].append(advantage_max)
+        self._step_metrics[mode]['step_advantage_min'].append(advantage_min)
+        self._step_metrics[mode]['step_advantage_std'].append(advantage_std)
 
         completion_length = self.accelerator.gather_for_metrics(completion_mask.sum(1)).float().mean().item()
         self._metrics[mode]["completion_length"].append(completion_length)
