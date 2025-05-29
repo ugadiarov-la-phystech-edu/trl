@@ -125,7 +125,7 @@ def grpo_function(
 
         gt_steps = '\n'.join(gt_step_strings)
         return {'prompt': f'{SYSTEM_PROMPT.strip()}\nTask: {multiplicand} * {multiplier}',
-                'answer': f'{gt_steps}\n{answer}'}
+                'answer': f'{gt_steps}\n{answer_num}'}
 
     # convert our dataset to the r1 prompt
     train_dataset = train_dataset.map(lambda x: generate_r1_prompt(x))
