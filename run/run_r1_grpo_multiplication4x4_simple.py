@@ -97,7 +97,7 @@ def grpo_function(
     ###############
     # Load dataset from Hugging Face Hub
     train_dataset = load_dataset(script_args.dataset_id_or_path, None, split="train")
-    train_dataset = train_dataset.shuffle(seed=42)
+    train_dataset = train_dataset.shuffle(seed=training_args.seed)
     test_dataset = load_dataset(script_args.dataset_id_or_path, None, split="valid")
 
     #####################
