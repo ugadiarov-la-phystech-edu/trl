@@ -945,7 +945,13 @@ class GRPOTrainer(Trainer):
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
             advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+            std_grouped_advantages = std_grouped_rewards
 
+
+        advantage_mean = self.accelerator.gather_for_metrics(advantages.mean()).float().item()
+        advantage_max = self.accelerator.gather_for_metrics(advantages.max()).float().item()
+        advantage_min = self.accelerator.gather_for_metrics(advantages.min()).float().item()
+        advantage_std = self.accelerator.gather_for_metrics(std_grouped_advantages.mean()).float().item()
 
         # Slice to keep only the local part of the data
         process_slice = slice(
@@ -956,6 +962,11 @@ class GRPOTrainer(Trainer):
 
         # Log the metrics
         mode = "eval" if self.control.should_evaluate else "train"
+
+        self._metrics[mode]['advantage_mean'].append(advantage_mean)
+        self._metrics[mode]['advantage_max'].append(advantage_max)
+        self._metrics[mode]['advantage_min'].append(advantage_min)
+        self._metrics[mode]['advantage_std'].append(advantage_std)
 
         completion_length = self.accelerator.gather_for_metrics(completion_mask.sum(1)).float().mean().item()
         self._metrics[mode]["completion_length"].append(completion_length)
