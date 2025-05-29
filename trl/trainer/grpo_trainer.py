@@ -412,6 +412,10 @@ class GRPOTrainer(Trainer):
             "train": collections.defaultdict(lambda : collections.deque(maxlen=history_length)),
             "eval": collections.defaultdict(lambda : collections.deque(maxlen=10 * history_length))
         }
+        self._step_metrics = {
+            "train": collections.defaultdict(lambda : collections.deque(maxlen=1)),
+            "eval": collections.defaultdict(lambda : collections.deque(maxlen=1))
+        }
         self.log_completions = args.log_completions
 
         super().__init__(
@@ -968,6 +972,11 @@ class GRPOTrainer(Trainer):
         self._metrics[mode]['advantage_min'].append(advantage_min)
         self._metrics[mode]['advantage_std'].append(advantage_std)
 
+        self._step_metrics[mode]['advantage_mean'].append(advantage_mean)
+        self._step_metrics[mode]['advantage_max'].append(advantage_max)
+        self._step_metrics[mode]['advantage_min'].append(advantage_min)
+        self._step_metrics[mode]['advantage_std'].append(advantage_std)
+
         completion_length = self.accelerator.gather_for_metrics(completion_mask.sum(1)).float().mean().item()
         self._metrics[mode]["completion_length"].append(completion_length)
 
@@ -1127,14 +1136,14 @@ class GRPOTrainer(Trainer):
 
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         mode = "eval" if self.control.should_evaluate else "train"
-        metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items()}  # average the metrics
+        metrics = {key: sum(val) / len(val) for key, val in {**self._metrics[mode], **self._step_metrics[mode]}.items()}  # average the metrics
 
         # This method can be called both in training and evaluation. When called in evaluation, the keys in `logs`
         # start with "eval_". We need to add the prefix "eval_" to the keys in `metrics` to match the format.
         if mode == "eval":
             metrics = {f"eval_{key}": val for key, val in metrics.items()}
 
-        logs = {**logs, **metrics}
+        logs = {**logs, **metrics,}
         if version.parse(transformers.__version__) >= version.parse("4.47.0.dev0"):
             super().log(logs, start_time)
         else:  # transformers<=4.46
