@@ -212,4 +212,8 @@ def main():
 
 
 if __name__ == "__main__":
+    import torch
+    import numpy as np
+
+    torch.serialization.add_safe_globals([np.core.multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.UInt32DType])
     main()
