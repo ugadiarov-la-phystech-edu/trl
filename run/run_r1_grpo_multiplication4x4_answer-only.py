@@ -2,6 +2,14 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 import os
+import urllib3, socket
+from urllib3.connection import HTTPConnection
+
+HTTPConnection.default_socket_options = (
+    HTTPConnection.default_socket_options + [
+    (socket.SOL_SOCKET, socket.SO_SNDBUF, 2000000),
+    (socket.SOL_SOCKET, socket.SO_RCVBUF, 2000000)
+    ])
 
 import torch
 import numpy as np

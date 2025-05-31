@@ -2,6 +2,14 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 import os
+import urllib3, socket
+from urllib3.connection import HTTPConnection
+
+HTTPConnection.default_socket_options = (
+    HTTPConnection.default_socket_options + [
+    (socket.SOL_SOCKET, socket.SO_SNDBUF, 2000000),
+    (socket.SOL_SOCKET, socket.SO_RCVBUF, 2000000)
+    ])
 
 from run.multiplication4x4_utils import reward_step_answer, reward_step_expression, reward_step_tag, \
     reward_answer_number, reward_answer_tag, reward_response_length, reward_step_answer_sparse, \
