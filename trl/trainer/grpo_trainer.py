@@ -14,18 +14,19 @@
 import collections
 import contextlib
 import functools
+import math
 import os
 import random
 import textwrap
 import warnings
 from collections import defaultdict
-from typing import Any, Callable, Optional, Sized, Union
+from typing import Any, Callable, Optional, Sized, Union, Dict
 from unittest.mock import patch
 
 import torch
 import torch.utils.data
 import transformers
-from accelerate import PartialState
+from accelerate import PartialState, DistributedType
 from accelerate.utils import broadcast_object_list, gather, gather_object, is_peft_model, set_seed
 from accelerate.utils.other import is_compiled_module
 from datasets import Dataset, IterableDataset
@@ -41,10 +42,13 @@ from transformers import (
     PreTrainedTokenizerBase,
     Trainer,
     TrainerCallback,
-    is_wandb_available,
+    is_wandb_available, is_torch_xpu_available, is_torch_mlu_available, is_torch_musa_available, is_torch_npu_available,
+    is_apex_available,
 )
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
-from transformers.utils import is_peft_available
+from transformers.trainer_pt_utils import smp_forward_backward
+from transformers.training_args import OptimizerNames
+from transformers.utils import is_peft_available, is_sagemaker_mp_enabled, is_torch_mps_available
 
 from ..data_utils import apply_chat_template, is_conversational, maybe_apply_chat_template
 from ..extras.profiling import profiling_context, profiling_decorator
@@ -60,6 +64,9 @@ from .utils import (
     selective_log_softmax,
 )
 
+
+if is_apex_available():
+    from apex import amp
 
 if is_peft_available():
     from peft import PeftConfig, get_peft_model
@@ -1076,6 +1083,114 @@ class GRPOTrainer(Trainer):
             "advantages": advantages,
         }
 
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], num_items_in_batch=None
+    ) -> torch.Tensor:
+        """
+        Perform a training step on a batch of inputs.
+
+        Subclass and override to inject custom behavior.
+
+        Args:
+            model (`nn.Module`):
+                The model to train.
+            inputs (`Dict[str, Union[torch.Tensor, Any]]`):
+                The inputs and targets of the model.
+
+                The dictionary will be unpacked before being fed to the model. Most models expect the targets under the
+                argument `labels`. Check your model's documentation for all accepted arguments.
+
+        Return:
+            `torch.Tensor`: The tensor with training loss on this batch.
+        """
+        model.train()
+        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
+            self.optimizer.train()
+
+        inputs = self._prepare_inputs(inputs)
+        if is_sagemaker_mp_enabled():
+            loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)
+            return loss_mb.reduce_mean().detach().to(self.args.device)
+
+
+        completion_mask = inputs["completion_mask"]
+        completion_mask_flatten = completion_mask.reshape(-1)
+        global_idx = torch.nonzero(completion_mask_flatten)[:, 0]
+        shuffle = torch.randperm(global_idx.size(0))
+        global_idx = global_idx[shuffle]
+
+        batch_size_tokens = self.args.batch_size_tokens
+        min_batch_size_tokens = self.args.min_batch_size_tokens
+        n_tokens = completion_mask.sum()
+        last_batch_size_tokens = n_tokens % batch_size_tokens
+        if last_batch_size_tokens >= min_batch_size_tokens:
+            n_batches = math.ceil(n_tokens / batch_size_tokens)
+        else:
+            n_batches = max(1, math.floor(n_tokens / batch_size_tokens))
+
+        losses = []
+        for i in range(n_batches):
+            low = i * batch_size_tokens
+            if i == n_batches - 1:
+                high = global_idx.size(0)
+            else:
+                high = (i + 1) * batch_size_tokens
+
+            batch_idx = global_idx[low: high]
+            batch_completion_mask = torch.zeros_like(completion_mask_flatten)
+            batch_completion_mask[batch_idx] = 1
+            inputs["batch_completion_mask"] = batch_completion_mask.reshape_as(completion_mask)
+
+            with self.compute_loss_context_manager():
+                loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
+
+            if (
+                self.args.torch_empty_cache_steps is not None
+                and self.state.global_step % self.args.torch_empty_cache_steps == 0
+            ):
+                if is_torch_xpu_available():
+                    torch.xpu.empty_cache()
+                elif is_torch_mlu_available():
+                    torch.mlu.empty_cache()
+                elif is_torch_musa_available():
+                    torch.musa.empty_cache()
+                elif is_torch_npu_available():
+                    torch.npu.empty_cache()
+                elif is_torch_mps_available(min_version="2.0"):
+                    torch.mps.empty_cache()
+                else:
+                    torch.cuda.empty_cache()
+
+            kwargs = {}
+
+            # For LOMO optimizers you need to explicitly use the learnign rate
+            if self.args.optim in [OptimizerNames.LOMO, OptimizerNames.ADALOMO]:
+                kwargs["learning_rate"] = self._get_learning_rate()
+
+            if self.args.n_gpu > 1:
+                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+            if self.use_apex:
+                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                # Finally we need to normalize the loss for reporting
+                if not self.model_accepts_loss_kwargs and self.compute_loss_func is None:
+                    loss = loss / self.args.gradient_accumulation_steps
+
+                # Turning off loss scaling w.r.t. gradient accumulation when DeepSpeed is enabled
+                # https://github.com/huggingface/transformers/pull/35808
+                if self.accelerator.distributed_type == DistributedType.DEEPSPEED:
+                    kwargs["scale_wrt_gas"] = False
+
+                self.accelerator.backward(loss, **kwargs)
+
+            losses.append(loss.detach())
+
+        del inputs
+
+        return sum(losses) / len(losses)
+
     @profiling_decorator
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         if return_outputs:
@@ -1112,6 +1227,8 @@ class GRPOTrainer(Trainer):
         per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
         if self.beta != 0.0:
             per_token_loss = per_token_loss + self.beta * per_token_kl
+
+        completion_mask = inputs['batch_completion_mask']
         loss = (per_token_loss * completion_mask).sum() / completion_mask.sum()
 
         # Log the metrics

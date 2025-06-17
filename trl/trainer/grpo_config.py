@@ -354,3 +354,17 @@ class GRPOConfig(TrainingArguments):
             "installed, it prints the sample. If `wandb` logging is enabled, it logs it to `wandb`."
         },
     )
+
+    batch_size_tokens: Optional[bool] = field(
+        default=4096,
+        metadata={
+            "help": "Whether reward is calculated for every step (token)"
+        },
+    )
+
+    min_batch_size_tokens: Optional[bool] = field(
+        default=1024,
+        metadata={
+            "help": "Whether reward is calculated for every step (token)"
+        },
+    )
