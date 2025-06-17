@@ -46,9 +46,18 @@ from transformers import (
     is_apex_available,
 )
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
-from transformers.trainer_pt_utils import smp_forward_backward
 from transformers.training_args import OptimizerNames
 from transformers.utils import is_peft_available, is_sagemaker_mp_enabled, is_torch_mps_available
+
+if is_sagemaker_mp_enabled():
+    import smdistributed.modelparallel.torch as smp
+    from smdistributed.modelparallel import __version__ as SMP_VERSION
+
+    IS_SAGEMAKER_MP_POST_1_10 = version.parse(SMP_VERSION) >= version.parse("1.10")
+
+    from .trainer_pt_utils import smp_forward_backward, smp_forward_only, smp_gather, smp_nested_concat
+else:
+    IS_SAGEMAKER_MP_POST_1_10 = False
 
 from ..data_utils import apply_chat_template, is_conversational, maybe_apply_chat_template
 from ..extras.profiling import profiling_context, profiling_decorator
@@ -1188,6 +1197,10 @@ class GRPOTrainer(Trainer):
             losses.append(loss.detach())
 
         del inputs
+
+        # Log the metrics
+        mode = "eval" if self.control.should_evaluate else "train"
+        self._metrics[mode]["n_minibatches"].append(n_batches)
 
         return sum(losses) / len(losses)
 
